@@ -9,13 +9,10 @@ interface Message {
   text: string;
 }
 
-// Auto-upgrade ws:// → wss:// when page is served over HTTPS
 function getServerUrl() {
-  const url = process.env.NEXT_PUBLIC_SERVER_URL ?? "ws://localhost:8765";
-  if (typeof window !== "undefined" && window.location.protocol === "https:") {
-    return url.replace(/^ws:\/\//, "wss://");
-  }
-  return url;
+  if (typeof window === "undefined") return "ws://localhost:3000/ws";
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}/ws`;
 }
 const SERVER_URL = getServerUrl();
 
