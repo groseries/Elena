@@ -18,6 +18,7 @@ from pipecat.transports.network.websocket_server import (
 from prompts import TUTOR_SYSTEM_PROMPT
 from raw_serializer import RawFrameSerializer
 from silero_tts import SileroTTSService
+from transcript_forwarder import TranscriptForwarder
 
 
 async def run_tutor_pipeline(host: str = "0.0.0.0", port: int = 8765, stt_device: str = "cuda"):
@@ -66,12 +67,17 @@ async def run_tutor_pipeline(host: str = "0.0.0.0", port: int = 8765, stt_device
     context = OpenAILLMContext(messages)
     context_aggregator = llm.create_context_aggregator(context)
 
+    user_transcript = TranscriptForwarder(transport)
+    assistant_transcript = TranscriptForwarder(transport)
+
     pipeline = Pipeline(
         [
             transport.input(),
             stt,
+            user_transcript,
             context_aggregator.user(),
             llm,
+            assistant_transcript,
             tts,
             transport.output(),
             context_aggregator.assistant(),

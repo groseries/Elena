@@ -21,6 +21,8 @@ export class ElenaAudioClient {
   private audioContext: AudioContext | null = null;
   private processor: ScriptProcessorNode | null = null;
   private outputContext: AudioContext | null = null;
+  private mediaStreamDest: MediaStreamAudioDestinationNode | null = null;
+  private audioEl: HTMLAudioElement | null = null;
 
   // Playback queue for gapless audio
   private playbackQueue: AudioBuffer[] = [];
@@ -61,6 +63,12 @@ export class ElenaAudioClient {
       this.audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
       this.outputContext = new AudioContext({ sampleRate: 24000 });
 
+      // Route output through <audio> element so iOS volume buttons work
+      this.mediaStreamDest = this.outputContext.createMediaStreamDestination();
+      this.audioEl = new Audio();
+      this.audioEl.srcObject = this.mediaStreamDest.stream;
+      this.audioEl.play();
+
       this.ws = new WebSocket(this.serverUrl);
       this.ws.binaryType = "arraybuffer";
 
@@ -98,6 +106,9 @@ export class ElenaAudioClient {
     this.stopPlayback();
     this.ws?.close();
     this.ws = null;
+    this.audioEl?.pause();
+    this.audioEl = null;
+    this.mediaStreamDest = null;
     this.audioContext?.close();
     this.outputContext?.close();
     this.audioContext = null;
@@ -182,7 +193,7 @@ export class ElenaAudioClient {
 
     const source = this.outputContext.createBufferSource();
     source.buffer = buffer;
-    source.connect(this.outputContext.destination);
+    source.connect(this.mediaStreamDest || this.outputContext.destination);
 
     const now = this.outputContext.currentTime;
     const startAt = Math.max(this.playbackNextTime, now);
