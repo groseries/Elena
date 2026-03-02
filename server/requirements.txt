@@ -1,0 +1,4 @@
+pipecat-ai[silero,ollama,websocket,whisper]
+torch
+numpy
+loguru

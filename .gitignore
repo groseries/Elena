@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node
+client/node_modules/
+client/.next/
+
+# Env
+client/.env.local
+
+# OS
+.DS_Store
+
+# IDE
+.claude/
