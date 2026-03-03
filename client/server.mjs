@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from "fs";
 import { execSync } from "child_process";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { networkInterfaces } from "os";
 import next from "next";
 import httpProxy from "http-proxy";
 
@@ -11,6 +12,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
 const pipecatUrl = process.env.PIPECAT_URL || "ws://localhost:8765";
+
+function getLocalIP() {
+  const nets = networkInterfaces();
+  for (const ifaces of Object.values(nets)) {
+    for (const iface of ifaces) {
+      if (iface.family === "IPv4" && !iface.internal) return iface.address;
+    }
+  }
+  return "127.0.0.1";
+}
 
 const certDir = join(__dirname, "certs");
 const keyPath = join(certDir, "key.pem");
@@ -54,9 +65,11 @@ app.prepare().then(() => {
     }
   });
   httpsServer.listen(port, "0.0.0.0", () => {
-    console.log(`> Elena client ready on https://0.0.0.0:${port}`);
+    const localIP = getLocalIP();
+    console.log(`> Elena ready:`);
+    console.log(`>   Desktop:  https://localhost:${port}`);
+    console.log(`>   Phone:    https://${localIP}:${port}`);
     console.log(`> WebSocket proxy: /ws → ${pipecatUrl}`);
-    console.log(`> Open https://<your-ip>:${port} on your phone (accept the cert warning)`);
   });
 
   // Also serve HTTP on port+1 for localhost dev

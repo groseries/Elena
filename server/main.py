@@ -1,6 +1,18 @@
 import asyncio
 import argparse
+import os
+import site
 from loguru import logger
+
+# On Windows, ctranslate2 uses plain LoadLibrary() which searches PATH, not the
+# add_dll_directory() list. Add nvidia pip-package bin dirs to PATH before any CUDA load.
+for _sp in site.getsitepackages():
+    _nvidia = os.path.join(_sp, "nvidia")
+    if os.path.isdir(_nvidia):
+        for _pkg in os.listdir(_nvidia):
+            _bin = os.path.join(_nvidia, _pkg, "bin")
+            if os.path.isdir(_bin) and _bin not in os.environ.get("PATH", ""):
+                os.environ["PATH"] = _bin + os.pathsep + os.environ.get("PATH", "")
 
 from tutor_pipeline import run_tutor_pipeline
 
