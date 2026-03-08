@@ -1,4 +1,5 @@
 import asyncio
+import time
 from loguru import logger
 
 from pipecat.audio.vad.silero import SileroVADAnalyzer
@@ -15,6 +16,7 @@ from pipecat.transports.network.websocket_server import (
     WebsocketServerTransport,
 )
 
+from cjk_filter import CJKFilter
 from prompts import TUTOR_SYSTEM_PROMPT
 from raw_serializer import RawFrameSerializer
 from silero_tts import SileroTTSService
@@ -69,6 +71,7 @@ async def run_tutor_pipeline(host: str = "0.0.0.0", port: int = 8765, stt_device
 
     user_transcript = TranscriptForwarder(transport)
     assistant_transcript = TranscriptForwarder(transport)
+    cjk_filter = CJKFilter()
 
     pipeline = Pipeline(
         [
@@ -77,6 +80,7 @@ async def run_tutor_pipeline(host: str = "0.0.0.0", port: int = 8765, stt_device
             user_transcript,
             context_aggregator.user(),
             llm,
+            cjk_filter,
             assistant_transcript,
             tts,
             transport.output(),
@@ -91,11 +95,22 @@ async def run_tutor_pipeline(host: str = "0.0.0.0", port: int = 8765, stt_device
             audio_out_sample_rate=24000,
             allow_interruptions=True,
         ),
+        idle_timeout_secs=None,
     )
+
+    # Track when the last client disconnected so we can detect reconnects
+    # (network blips) vs. fresh sessions.
+    last_disconnect_time: float = 0.0
+    RECONNECT_WINDOW_SECS = 8.0
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
-        logger.info(f"Client connected")
+        nonlocal last_disconnect_time
+        elapsed = time.monotonic() - last_disconnect_time
+        if last_disconnect_time > 0 and elapsed < RECONNECT_WINDOW_SECS:
+            logger.info(f"Client reconnected after {elapsed:.1f}s — resuming session, skipping opening prompt")
+            return
+        logger.info("Client connected — starting new session")
         # Prompt the LLM to open the conversation
         opening = list(messages) + [
             {
@@ -107,8 +122,9 @@ async def run_tutor_pipeline(host: str = "0.0.0.0", port: int = 8765, stt_device
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
-        logger.info("Client disconnected")
-        await task.cancel()
+        nonlocal last_disconnect_time
+        last_disconnect_time = time.monotonic()
+        logger.info("Client disconnected — pipeline stays alive for reconnects")
 
     runner = PipelineRunner(handle_sigint=True)
     await runner.run(task)

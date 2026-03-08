@@ -43,6 +43,7 @@ export class ElenaAudioClient {
   // ── Connection ─────────────────────────────────────────────────────────────
 
   async connect(): Promise<void> {
+    console.log("[Elena] connect() called, current ws state:", this.ws?.readyState);
     this.setConnection("connecting");
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -73,6 +74,7 @@ export class ElenaAudioClient {
       this.ws.binaryType = "arraybuffer";
 
       this.ws.onopen = () => {
+        console.log("[Elena] WebSocket opened");
         this.setConnection("connected");
         this.startCapture();
       };
@@ -85,12 +87,14 @@ export class ElenaAudioClient {
         }
       };
 
-      this.ws.onerror = () => {
+      this.ws.onerror = (e) => {
+        console.error("[Elena] WebSocket error", e);
         this.callbacks.onError("WebSocket error");
         this.setConnection("error");
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (e) => {
+        console.warn("[Elena] WebSocket closed", e.code, e.reason, "wasClean:", e.wasClean);
         this.setConnection("disconnected");
         this.setState("idle");
         this.stopCapture();
@@ -130,6 +134,9 @@ export class ElenaAudioClient {
 
     this.processor.onaudioprocess = (e) => {
       if (this.ws?.readyState !== WebSocket.OPEN) return;
+      // Don't send mic audio while the bot is speaking — prevents VAD timeout spam
+      // and echo-triggered interruptions.
+      if (this.state === "speaking") return;
       const float32 = e.inputBuffer.getChannelData(0);
       // Convert Float32 to Int16 PCM
       const int16 = new Int16Array(float32.length);
